@@ -1,0 +1,30 @@
+Ce répertoire contient des fichiers tests pour le TP 4MMAOD.
+
+Vous pouvez utiliser les fichiers .in qui sont soit en ASCII (compatibles UTF-8 et ISO-8859-1) soit en ISO-8859-1.
+Ces fichiers seront utilisés dans les tests, avec des valeurs de M de 50 à 2000.
+
+La commande "file" donne le format d'un fichier. Exemple:
+$ file nomfich
+
+La commande "iconv" permet de convertir un fichier de texte d'un format à un autre.  Par exemple:
+iconv -f ISO-8859-1 -t UTF-8  nomfich 
+affiche le fichier source (en ISO-8859-1) en format UTF-8 sur la sortie. 
+On peut convertir un fichier avec iconv en redirigeant la sortie; exemple:
+iconv -f ISO-8859-1 -t UTF-8  nomfich > nomfich-utf8
+
+
+NB Les fichiers .in sont des entrees.
+Pour vous aider, les fichiers .out sont des exemples de sortie, suffixés avec les parammètres de la commande
+et la valeur obtenue en sortie.
+Par exemple foo.iso8859-1.M6valeur38.out 
+est le fichier qui a été obtenu par la commande: ../install/AODjustify 6 foo.iso8859-1
+Cette commande a affiché le message "AODjustify CORRECT> 38" et a généré un fichier foo.iso8859-1.out
+dont la norme en justification est 38 et qui a été copié dans le fichier foo.iso8859-1.M6valeur38.out.
+Trace d'éxxécution : 
+
+$ ../install/AODjustify 6 foo.iso8859-1
+AODjustify CORRECT> 38
+$ mv ../install/AODjustify 6 foo.iso8859-1.out foo.iso8859-1.M6valeur38.out
+
+Exemple: Le fichier longtempsjemesuis.ISO-8859.in  pour une ligne de taille 80 caractères à une norme=3113.
+
