@@ -1,28 +1,22 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2
-DEBUG_FLAGS = -g -DDEBUG
-LDFLAGS =
+CFLAGS = -Wall -Wextra -O2 -g
+TARGET = bin/AODjustify
+SRC = src/file_parser.c
+BINDIR = bin
 
-SRC_DIR = src
-BIN_DIR = bin
+all: $(BINDIR) $(TARGET)
 
-SOURCES = $(wildcard $(SRC_DIR)/*.c)
+$(BINDIR):
+	mkdir -p $(BINDIR)
 
-TARGET = $(BIN_DIR)/AODjustify
-
-all: $(TARGET)
-
-$(BIN_DIR):
-	mkdir -p $@
-
-$(TARGET): $(SOURCES) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $(SOURCES) $(LDFLAGS) -o $@
-
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
 
 clean:
-	rm -f $(BIN_DIR)/AODjustify
+	rm -f $(TARGET)
+	rm -rf $(BINDIR)
 
-run: $(TARGET)
-	@./$(TARGET) 6 Benchmark-2025/foo.iso8859-1.in 2>&1
+test: $(TARGET)
+	valgrind --tool=cachegrind $(TARGET) 80 Benchmark-2025/longtempsjemesuis.ISO-8859.in
 
-.PHONY: all clean run
+.PHONY: all clean test
