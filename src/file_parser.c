@@ -45,7 +45,7 @@ struct stat verifier_encodage_fichier(const char *nom_fichier) {
 
 // Ouvre et mappe le fichier en mémoire
 char* ouvrir_fichier(const struct stat info_fichier, int fd) {
-    char *carte = mmap(NULL, info_fichier.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    char *carte = mmap(NULL, (size_t)info_fichier.st_size, PROT_READ, MAP_SHARED, fd, 0);
     if (carte == MAP_FAILED) {
         fprintf(stderr, "AODjustify ERROR> Ouverture fichier impossible\n");
         close(fd);
@@ -117,7 +117,7 @@ void ecrire_ligne_justifiee(FILE *sortie, Mot *mots[], long long i, long long k,
     if (derniere_ligne || k - i == 1) {
         // Dernière ligne ou ligne avec un seul mot : pas de justification
         for (long long idx = i; idx < k; idx++) {
-            fwrite(mots[idx]->debut, 1, mots[idx]->taille, sortie);
+            fwrite(mots[idx]->debut, 1, (size_t)mots[idx]->taille, sortie);
             if (idx < k - 1) {
                 fputc(' ', sortie);
             }
@@ -134,7 +134,7 @@ void ecrire_ligne_justifiee(FILE *sortie, Mot *mots[], long long i, long long k,
         long long espaces_supplementaires = espaces_totaux % nb_intervalles;
 
         for (long long idx = i; idx < k; idx++) {
-            fwrite(mots[idx]->debut, 1, mots[idx]->taille, sortie);
+            fwrite(mots[idx]->debut, 1, (size_t)mots[idx]->taille, sortie);
             if (idx < k - 1) {
                 long long nb_espaces = espaces_base;
                 if (espaces_supplementaires > 0) {
@@ -169,8 +169,8 @@ void justifier_paragraphe(FILE *sortie, Mot *mots[], long long n) {
     }
 
     Memoisation memo;
-    memo.cout = calloc(n + 1, sizeof(long long));
-    memo.prochaine = calloc(n + 1, sizeof(long long));
+    memo.cout = calloc((size_t)(n + 1), sizeof(long long));
+    memo.prochaine = calloc((size_t)(n + 1), sizeof(long long));
 
     // Calcul du découpage optimal
     decoupage_optimal(mots, n, &memo);
@@ -194,39 +194,38 @@ void justifier_paragraphe(FILE *sortie, Mot *mots[], long long n) {
 
 // Parse et traite le fichier entier
 void traiter_fichier(const char *fichier, size_t taille_fichier, FILE *sortie) {
-    Mot *mots[100000]; // Tableau pour stocker les mots d'un paragraphe
-    long long nb_mots = 0;
-    size_t position = 0;
+    Mot **mots = NULL;         // Tableau dynamique de pointeurs vers Mot
+    size_t nb_mots = 0;        // Nombre de mots dans le paragraphe
+    size_t capacite = 0;       // Capacité actuelle du tableau
+    size_t position = 0;       // Position actuelle dans le fichier
 
     while (position < taille_fichier) {
         nb_mots = 0;
 
-        // Parser un paragraphe
+        // Lire un paragraphe
         while (position < taille_fichier) {
-            // Ignorer les espaces en début
+            // Ignorer les espaces sauf les sauts de ligne
             while (position < taille_fichier && isspace(fichier[position]) && fichier[position] != '\n') {
                 position++;
             }
 
-            // Vérifier fin de paragraphe (ligne vide)
+            // Fin de paragraphe : ligne vide
             if (position < taille_fichier && fichier[position] == '\n') {
                 position++;
-                // Vérifier si c'est une ligne vide (nouveau paragraphe)
                 size_t pos_temp = position;
                 while (pos_temp < taille_fichier && (fichier[pos_temp] == ' ' || fichier[pos_temp] == '\t')) {
                     pos_temp++;
                 }
                 if (pos_temp < taille_fichier && fichier[pos_temp] == '\n') {
-                    // Ligne vide trouvée, fin du paragraphe
                     position = pos_temp + 1;
                     break;
                 }
             }
 
-            // Trouver le début d'un mot
+            // Début d’un mot
             if (position < taille_fichier && !isspace(fichier[position])) {
                 const char *debut_mot = &fichier[position];
-                long long taille_mot = 0;
+                size_t taille_mot = 0;
 
                 // Calculer la taille du mot
                 while (position < taille_fichier && !isspace(fichier[position])) {
@@ -234,47 +233,90 @@ void traiter_fichier(const char *fichier, size_t taille_fichier, FILE *sortie) {
                     position++;
                 }
 
+                // Agrandir le tableau si nécessaire
+                if (nb_mots >= capacite) {
+                    capacite = (capacite == 0) ? 128 : capacite * 2;
+                    mots = realloc(mots, capacite * sizeof(Mot *));
+                    if (!mots) {
+                        fprintf(stderr, "Erreur : allocation mémoire échouée.\n");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+
                 // Créer et stocker le mot
-                mots[nb_mots] = (Mot*)malloc(sizeof(Mot));
+                mots[nb_mots] = malloc(sizeof(Mot));
+                if (!mots[nb_mots]) {
+                    fprintf(stderr, "Erreur : allocation mémoire échouée.\n");
+                    exit(EXIT_FAILURE);
+                }
+
                 mots[nb_mots]->debut = debut_mot;
-                mots[nb_mots]->taille = taille_mot;
+                mots[nb_mots]->taille = (long long)taille_mot;
                 nb_mots++;
             }
         }
 
         // Justifier et écrire le paragraphe si non vide
         if (nb_mots > 0) {
-            justifier_paragraphe(sortie, mots, nb_mots);
+            justifier_paragraphe(sortie, mots, (long long)nb_mots);
 
-            // Ajouter une ligne vide après le paragraphe (sauf à la fin)
+            // Ajouter une ligne vide après le paragraphe
             if (position < taille_fichier) {
                 fputc('\n', sortie);
             }
 
             // Libérer la mémoire des mots
-            for (long long i = 0; i < nb_mots; i++) {
+            for (size_t i = 0; i < nb_mots; i++) {
                 free(mots[i]);
             }
         }
     }
+
+    // Libérer le tableau de pointeurs
+    free(mots);
+}
+
+
+// Génère le nom du fichier d'entrée (ajoute .in)
+char* generer_nom_entree(const char *nom_base) {
+    size_t longueur = strlen(nom_base);
+
+    // Vérifier si le nom se termine déjà par .in
+    if (longueur > 3 && strcmp(&nom_base[longueur - 3], ".in") == 0) {
+        // Déjà avec .in, copier tel quel
+        char *nom_entree = (char*)malloc(longueur + 1);
+        strcpy(nom_entree, nom_base);
+        return nom_entree;
+    } else {
+        // Ajouter .in
+        char *nom_entree = (char*)malloc(longueur + 4);  // +3 pour ".in" +1 pour '\0'
+        strcpy(nom_entree, nom_base);
+        strcat(nom_entree, ".in");
+        return nom_entree;
+    }
 }
 
 // Génère le nom du fichier de sortie
-char* generer_nom_sortie(const char *nom_entree) {
-    // Retirer l'extension .in si présente
-    size_t longueur = strlen(nom_entree);
-    char *nom_sortie = (char*)malloc(longueur + 5); // +5 pour ".out" et '\0'
+char* generer_nom_sortie(const char *nom_base) {
+    size_t longueur = strlen(nom_base);
 
-    if (longueur > 3 && strcmp(&nom_entree[longueur - 3], ".in") == 0) {
-        strncpy(nom_sortie, nom_entree, longueur - 3);
+    // Vérifier si le nom se termine par .in
+    if (longueur > 3 && strcmp(&nom_base[longueur - 3], ".in") == 0) {
+        char *nom_sortie = (char*)malloc(longueur + 2); // +5 pour ".out" et '\0' et -3 pour longueur - 3
+        strncpy(nom_sortie, nom_base, longueur - 3);
         nom_sortie[longueur - 3] = '\0';
         strcat(nom_sortie, ".out");
+        return nom_sortie;
     } else {
-        strcpy(nom_sortie, nom_entree);
+        char *nom_sortie = (char*)malloc(longueur + 5); // +5 pour ".out" et '\0'
+        if (!nom_sortie) {
+            fprintf(stderr, "AODjustify ERROR> Allocation mémoire échouée\n");
+            exit(EXIT_FAILURE);
+        }
+        strcpy(nom_sortie, nom_base);
         strcat(nom_sortie, ".out");
+        return nom_sortie;
     }
-
-    return nom_sortie;
 }
 
 int main(int argc, char *argv[]) {
@@ -291,8 +333,12 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Nom du fichier d'entrée
-    const char *nom_entree = argv[2];
+    // Nom de base (sans extension)
+    const char *nom_base = argv[2];
+
+    // Générer le nom du fichier d'entrée (ajouter .in)
+    char *nom_entree = generer_nom_entree(nom_base);
+
 
     // Vérifier l'encodage
     struct stat info_fichier = verifier_encodage_fichier(nom_entree);
@@ -301,6 +347,7 @@ int main(int argc, char *argv[]) {
     int fd = open(nom_entree, O_RDONLY);
     if (fd == -1) {
         fprintf(stderr, "AODjustify ERROR> Ouverture fichier impossible\n");
+        free(nom_entree);
         exit(1);
     }
 
@@ -314,14 +361,15 @@ int main(int argc, char *argv[]) {
     FILE *sortie = fopen(nom_sortie, "w");
     if (!sortie) {
         fprintf(stderr, "AODjustify ERROR> Création du fichier de sortie impossible\n");
-        munmap(fichier, info_fichier.st_size);
+        munmap(fichier, (size_t)info_fichier.st_size);
         close(fd);
+        free(nom_entree);
         free(nom_sortie);
         exit(1);
     }
 
     // Traiter le fichier
-    traiter_fichier(fichier, info_fichier.st_size, sortie);
+    traiter_fichier(fichier, (size_t)info_fichier.st_size, sortie);
 
     // Fermer le fichier de sortie
     fclose(sortie);
@@ -330,8 +378,9 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "AODjustify CORRECT> %lld\n", valeur_norme_totale);
 
     // Nettoyage
-    munmap(fichier, info_fichier.st_size);
+    munmap(fichier, (size_t)info_fichier.st_size);
     close(fd);
+    free(nom_entree);
     free(nom_sortie);
 
     return 0;
