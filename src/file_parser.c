@@ -73,8 +73,31 @@ long long norme_cubique(long long e) {
     return e * e * e;
 }
 
+long long calculer_delta_rapide(long long *prefix_sum, long long i, long long k) {
+    if (i >= k) return M;
+
+    // Somme des tailles de mots de i à k-1
+    long long somme_tailles = prefix_sum[k] - prefix_sum[i];
+
+    // Nombre d'espaces entre les mots
+    long long nb_espaces = k - i - 1;
+
+    return M - somme_tailles - nb_espaces;
+}
+
 // Programmation dynamique itérative pour trouver le découpage optimal
 void decoupage_optimal(Mot *mots[], long long n, Memoisation *memo) {
+    // Précalculer les sommes préfixées des tailles de mots
+    long long *prefix_sum = calloc((size_t)(n + 1), sizeof(long long));
+    if (!prefix_sum) {
+        fprintf(stderr, "Erreur : allocation mémoire échouée.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (long long i = 0; i < n; i++) {
+        prefix_sum[i + 1] = prefix_sum[i] + mots[i]->taille;
+    }
+
     // Initialisation
     for (long long i = 0; i <= n; i++) {
         memo->cout[i] = LLONG_MAX;
@@ -86,7 +109,7 @@ void decoupage_optimal(Mot *mots[], long long n, Memoisation *memo) {
     // Calcul bottom-up
     for (long long i = n - 1; i >= 0; i--) {
         // Vérifier si on peut mettre tous les mots restants sur une ligne
-        long long delta_fin = calculer_delta(mots, i, n);
+        long long delta_fin = calculer_delta_rapide(prefix_sum, i, n);
         if (delta_fin >= 0) {
             memo->cout[i] = 0;
             memo->prochaine[i] = n;
@@ -95,7 +118,7 @@ void decoupage_optimal(Mot *mots[], long long n, Memoisation *memo) {
 
         // Essayer toutes les coupures possibles
         for (long long k = i + 1; k <= n; k++) {
-            long long delta = calculer_delta(mots, i, k);
+            long long delta = calculer_delta_rapide(prefix_sum, i, k);
             if (delta < 0) break; // Le mot ne rentre plus
 
             long long cout_ligne = norme_cubique(delta);
@@ -108,6 +131,8 @@ void decoupage_optimal(Mot *mots[], long long n, Memoisation *memo) {
             }
         }
     }
+
+    free(prefix_sum);
 }
 
 // Écrit une ligne justifiée dans le fichier de sortie
